@@ -1,11 +1,10 @@
-cs344
-=====
-[Introduction to Parallel Programming] (https://www.udacity.com/course/intro-to-parallel-programming--cs344)
+cs344 [Introduction to Parallel Programming] (https://www.udacity.com/course/intro-to-parallel-programming--cs344)
+============================================
 
 Thanks to https://github.com/wykvictor who had a set of instructions and has solutions set up for the problem sets.  I have not tried them out yet 
 
-## Building on Windows 10 with Visual Studio
-
+## Instructions for setting up Windows 10 system to build CUDA code
+---------------------------------------------------------------------------------
 1. Install Visual Studio:
 
 	- [download here](https://www.visualstudio.com/vs/).
@@ -46,7 +45,7 @@ Thanks to https://github.com/wykvictor who had a set of instructions and has sol
 	
 	I installed 3.2.12.
 	
-# Test nVidia compiler Version
+## Test nVidia compiler Version
 	
 Run the following in a command window to check that CUDA compiler is set properly.
 	
@@ -60,10 +59,11 @@ Run the following in a command window to check that CUDA compiler is set properl
 	
 ```
 
-# Building from a command window
+## Building from a command window
 
 [Instructions](https://msdn.microsoft.com/en-ca/library/ms235639.aspx) on how to use cl in command window - nvcc should work from there too.
 
 
 -------------------------------------------------
+
 >This is my first attempt at formatting a markdown file. TK 20170129
