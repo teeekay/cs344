@@ -10,7 +10,7 @@ Thanks to https://github.com/wykvictor who had a set of instructions and has sol
 
 	- [download here](https://www.visualstudio.com/vs/).
 	
-	- I installed Visual Studio 2015.
+	I installed Visual Studio 2015.
 	
 2. Install [Cuda Toolkit](https://developer.nvidia.com/cuda-toolkit):
 
@@ -18,21 +18,19 @@ Thanks to https://github.com/wykvictor who had a set of instructions and has sol
 	
 	- [Download here](https://developer.nvidia.com/cuda-downloads).
 	
-	- I installed version 8.0.
+	I installed version 8.0.
 
 3. Install [CMake](https://cmake.org/):
 
 	- [Download here](https://cmake.org/download/).
 	
-	- I installed version 3.7.2.
+	I installed version 3.7.2.
 
 4. Install [OpenCV](http://opencv.org/):
 
 	- [Instructions for Installing on Windows](http://docs.opencv.org/3.2.0/d3/d52/tutorial_windows_install.html#tutorial_windows_install_prebuilt).
 	
 	- [Download here](https://sourceforge.net/projects/opencvlibrary/files/opencv-win/).
-	
-	- I installed 3.2.12, other versions should also work.
 	
 	- Run the EXE to extract the files. This EXE does not have an installer. Instead, you put your files where you want, and then add [environment variables for the installation location and path to DLLs](http://docs.opencv.org/3.2.0/d3/d52/tutorial_windows_install.html#tutorial_windows_install_path).
 	 
@@ -45,6 +43,8 @@ Thanks to https://github.com/wykvictor who had a set of instructions and has sol
 	
 	```
 	note: that you may have a different path based on architecture x86 vs x64.
+	
+	I installed 3.2.12.
 	
 # Test nVidia compiler Version
 	
@@ -64,4 +64,6 @@ Run the following in a command window to check that CUDA compiler is set properl
 
 [Instructions](https://msdn.microsoft.com/en-ca/library/ms235639.aspx) on how to use cl in command window - nvcc should work from there too.
 
-####This is my first attempt at formatting a markdown file. TK 20170129
+
+-------------------------------------------------
+>This is my first attempt at formatting a markdown file. TK 20170129
