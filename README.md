@@ -65,5 +65,3 @@ Run the following in a command window to check that CUDA compiler is set properl
 
 
 -------------------------------------------------
-
->This is my first attempt at formatting a markdown file. TK 20170129
