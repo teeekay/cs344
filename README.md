@@ -3,7 +3,7 @@ cs344 [Introduction to Parallel Programming] (https://www.udacity.com/course/int
 
 Thanks to https://github.com/wykvictor who had a set of instructions and has solutions set up for the problem sets.  I have not tried them out yet 
 
-## Instructions for setting up Windows 10 system to build CUDA code
+## Instructions for setting up an X64 Windows 10 system to build CUDA code on Visual Studio 2015
 ---------------------------------------------------------------------------------
 1. Install Visual Studio:
 
@@ -37,17 +37,17 @@ Thanks to https://github.com/wykvictor who had a set of instructions and has sol
 	
 	```sh
 	
-  	setx -m OPENCV_DIR C:\OpenCV_3.2\build\x64\vc14
-  	setx -m PATH=%PATH%;%OPENCV_DIR%\bin
+  	setx -m OPENCV_DIR C:\OpenCV_3.2\build
+  	setx -m PATH=%PATH%;%OPENCV_DIR%\x64\vc14\bin
 	
 	```
 	note: that you may have a different path based on architecture x86 vs x64.
 	
 	I installed 3.2.12.
 	
-## Test nVidia compiler Version
+## Test the nVidia compiler Version
 	
-Run the following in a command window to check that CUDA compiler is set properly.
+Run the following in a command window to check that the CUDA compiler is set properly.
 	
 ```sh
 	
@@ -59,12 +59,22 @@ Run the following in a command window to check that CUDA compiler is set properl
 	
 ```
 
-## Machine Type.
+## Download and build cs344 Problem Sets in Visual Studio
 
-I am looking into problems I'm having building the cs344 code due to issues with X86 and X64 in the target machine type during the linking stage.
+```
+git clone https://github.com/teeekay/cs344.git
+cd cs344
+mkdir build
+cd build
+cmake .. -G "Visual Studio 14 2015 Win64"
+```
+The Visual Studio Solution file cs344.sln should then be found in the build subdirectory and can be used to load them into Visual studio where they can be built.
+
+ - Note: I had problems building the cs344 code due to issues with X86 and X64 in the target machine type during the linking stage.  these were resolved by setting the generator type in cmake
+ 
 
 ## Building from a command window
 
-[Instructions](https://msdn.microsoft.com/en-ca/library/ms235639.aspx) on how to use cl in command window - nvcc should work from there too.
+[General instructions](https://msdn.microsoft.com/en-ca/library/ms235639.aspx) on how to use cl in command window - nvcc should work from there too.  I have not yet attempted this for these problem sets.
 
 -------------------------------------------------
