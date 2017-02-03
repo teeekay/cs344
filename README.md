@@ -59,9 +59,12 @@ Run the following in a command window to check that CUDA compiler is set properl
 	
 ```
 
+## Machine Type.
+
+I am looking into problems I'm having building the cs344 code due to issues with X86 and X64 in the target machine type during the linking stage.
+
 ## Building from a command window
 
 [Instructions](https://msdn.microsoft.com/en-ca/library/ms235639.aspx) on how to use cl in command window - nvcc should work from there too.
-
 
 -------------------------------------------------
