@@ -1,8 +1,6 @@
 cs344 [Introduction to Parallel Programming] (https://www.udacity.com/course/intro-to-parallel-programming--cs344)
 ============================================
 
-Thanks to https://github.com/wykvictor who had a set of instructions and has solutions set up for the problem sets.  I have not tried them out yet 
-
 ## Instructions for setting up an X64 Windows 10 system to build CUDA code on Visual Studio 2015
 ---------------------------------------------------------------------------------
 1. Install Visual Studio:
@@ -78,3 +76,4 @@ The Visual Studio Solution file cs344.sln should then be found in the build subd
 [General instructions](https://msdn.microsoft.com/en-ca/library/ms235639.aspx) on how to use cl in command window - nvcc should work from there too.  I have not yet attempted this for these problem sets.
 
 -------------------------------------------------
+Thanks to https://github.com/wykvictor who had a set of instructions for older versions of CUDA and Visual Studio and has solutions set up for the problem sets.
