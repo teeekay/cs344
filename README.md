@@ -1,7 +1,6 @@
 cs344 [Introduction to Parallel Programming] (https://www.udacity.com/course/intro-to-parallel-programming--cs344)
 ============================================
 
-<<<<<<< HEAD
 ## Instructions for setting up an X64 Windows 10 system to build CUDA code on Visual Studio 2015
 ---------------------------------------------------------------------------------
 1. Install Visual Studio:
