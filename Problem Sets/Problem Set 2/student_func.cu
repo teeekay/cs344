@@ -99,7 +99,7 @@
 // Finally, remember to free the memory you allocate at the end of the function.
 
 //****************************************************************************
-
+//#define NSIGHT_CUDA_DEBUGGER = 1
 //Flag to define Block size 
 //#define TILE16x8
 #ifndef TILE16x8
@@ -378,7 +378,8 @@ void your_gaussian_blur(const uchar4 * const h_inputImageRGBA, uchar4 * const d_
   const dim3 blockSize(16,8,1);
 #else
     // found that 16*16, 20*16 and 20*20 work fine, not 12*12 with shared mem
-    const dim3 blockSize(16,16,1);  
+    //const dim3 blockSize(16,16,1);  
+	const dim3 blockSize(20, 20, 1);
 #endif
     
   //Compute correct grid size (i.e., number of blocks per kernel launch)

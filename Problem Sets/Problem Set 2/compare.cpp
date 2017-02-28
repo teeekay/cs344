@@ -30,10 +30,12 @@ void compareImages(std::string reference_filename, std::string test_filename, bo
   unsigned char *testPtr = test.ptr<unsigned char>(0);
 
   if (useEpsCheck) {
+	  std::cout << "checkresultsEPS" << std::endl;
     checkResultsEps(referencePtr, testPtr, reference.rows * reference.cols * reference.channels(), perPixelError, globalError);
   }
   else
   {
+	  std::cout << "checkresultsExact" << std::endl;
     checkResultsExact(referencePtr, testPtr, reference.rows * reference.cols * reference.channels());
   }
 
