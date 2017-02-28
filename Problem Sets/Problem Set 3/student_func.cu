@@ -225,15 +225,6 @@ __global__ void lumHisto_kernel(unsigned int *d_bins, const float* const d_in, c
 
 }
 
-__global__ void atomic_histo(unsigned int* d_histo, const float* const d_inputArray, const float minimum, const float range, const int numBins)
-{
-	int array_idx = threadIdx.x + blockDim.x*blockIdx.x;
-	int bin_idx = int(numBins*(d_inputArray[array_idx] - minimum) / range);
-
-	bin_idx = min(numBins - 1, bin_idx);
-	atomicAdd(&(d_histo[bin_idx]), 1);
-}
-
 
 __global__ void lumHistExclusiveScan_kernel(unsigned int *d_out, unsigned int *d_in, int numItems)
 {
