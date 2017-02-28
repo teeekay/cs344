@@ -99,8 +99,28 @@
 // Finally, remember to free the memory you allocate at the end of the function.
 
 //****************************************************************************
+//#define NSIGHT_CUDA_DEBUGGER = 1
+//Flag to define Block size
+//#define TILE16x8
+#ifndef TILE16x8
+ #define TILE16x16
+#endif
 
-//Flag to define Block size 
+// SHARED_IMAGE_TILE - flag to load image into shared memory tiles with Halos
+#define SHARED_IMAGE_TILE
+
+// FOUR_BLOCKS - flag to use four block stamp to create halo rather than trying
+// to do edges and corners seperately
+#define FOUR_BLOCKS
+
+// SHARED_FILTER - Flag to use the filter in shared memory
+#define SHARED_FILTER
+
+// SINGLE_LINE - Flag to cut down clamping function to single line
+#define SINGLE_LINE
+
+
+//Flag to define Block size
 //#define TILE16x8
 #ifndef TILE16x8
  #define TILE16x16
@@ -127,7 +147,7 @@
 /* input 2d calculated location and                                         */
 /* 2d position marking boundary of array (assuming (0,0) is start of array) */
 /* return 1d location of edge if going outside of image                     */
-__device__ int clamper(int s_locx, int s_locy, int2 a_bound)                
+__device__ int clamper(int s_locx, int s_locy, int2 a_bound)
 {
 #ifdef SINGLE_LINE
  // switched to single statement to try to reduce cost of function
@@ -148,7 +168,7 @@ void gaussian_blur(const unsigned char* const inputChannel,
                    const float* const filter, const int filterWidth)
 {
     extern __shared__ float s_a[];
-      
+
     const int2 t_2D_pos = make_int2( blockIdx.x * blockDim.x + threadIdx.x,
                                         blockIdx.y * blockDim.y + threadIdx.y);
     const int t_1D_pos = t_2D_pos.y * numCols + t_2D_pos.x;
@@ -158,7 +178,7 @@ void gaussian_blur(const unsigned char* const inputChannel,
   //by having any threads mapped there return early
     if ( t_2D_pos.x >= numCols || t_2D_pos.y >= numRows )
         return;
-        
+
     const int fRadius = filterWidth/2;
 
 #ifdef SHARED_IMAGE_TILE
@@ -171,7 +191,7 @@ void gaussian_blur(const unsigned char* const inputChannel,
 #endif
 
     const int filterSize = filterWidth * filterWidth;
-    
+
 
 
 #ifdef SHARED_FILTER
@@ -179,7 +199,7 @@ void gaussian_blur(const unsigned char* const inputChannel,
     const int f_1D_pos = threadIdx.y*filterWidth+threadIdx.x;
     const int2 f_2D_pos = make_int2(threadIdx.x,threadIdx.y);
     const int2 f_2D_bound = make_int2(filterWidth-1,filterWidth-1);
-    // try to put filter into shared memory - 
+    // try to put filter into shared memory -
     //  should be easy, but couldn't get it to work properly (was a block size issue!)
     if (threadIdx.x < filterWidth && threadIdx.y < filterWidth){
         s_a[f_1D_pos] = filter[f_1D_pos];
@@ -201,7 +221,7 @@ void gaussian_blur(const unsigned char* const inputChannel,
 
     s_a[filterOffset+s_2D_pos.x+fRadius+(s_2D_pos.y+fRadius)*sCols] =
           inputChannel[clamper(t_2D_pos.x+fRadius,t_2D_pos.y+fRadius,t_2D_bound)];
-#else 
+#else
     // try to fill each section around image tile -can't get to work properly missing case in corner.
     // first fill center of shared array with values from global memory
     s_a[filterOffset + s_1D_pos] = inputChannel[t_1D_pos];
@@ -249,7 +269,7 @@ void gaussian_blur(const unsigned char* const inputChannel,
             int image_r = min(max(s_2D_pos.y + filter_r, 0), static_cast<int>(sRows - 1));
             int image_c = min(max(s_2D_pos.x + filter_c, 0), static_cast<int>(sCols - 1));
             float image_value = static_cast<float>(s_a[filterOffset + (image_r * sCols) + image_c]);
-        #else            
+        #else
             int image_r = min(max(t_2D_pos.y + filter_r, 0), static_cast<int>(numRows - 1));
             int image_c = min(max(t_2D_pos.x + filter_c, 0), static_cast<int>(numCols - 1));
             float image_value = static_cast<float>(inputChannel[image_r * numCols + image_c]);
@@ -366,8 +386,8 @@ void allocateMemoryAndCopyToGPU(const size_t numRowsImage, const size_t numColsI
 
 void your_gaussian_blur(const uchar4 * const h_inputImageRGBA, uchar4 * const d_inputImageRGBA,
                         uchar4* const d_outputImageRGBA, const size_t numRows, const size_t numCols,
-                        unsigned char *d_redBlurred, 
-                        unsigned char *d_greenBlurred, 
+                        unsigned char *d_redBlurred,
+                        unsigned char *d_greenBlurred,
                         unsigned char *d_blueBlurred,
                         const int filterWidth)
 {
@@ -378,9 +398,10 @@ void your_gaussian_blur(const uchar4 * const h_inputImageRGBA, uchar4 * const d_
   const dim3 blockSize(16,8,1);
 #else
     // found that 16*16, 20*16 and 20*20 work fine, not 12*12 with shared mem
-    const dim3 blockSize(16,16,1);  
+
+    const dim3 blockSize(16,16,1);
 #endif
-    
+
   //Compute correct grid size (i.e., number of blocks per kernel launch)
   //from the image size and and block size.
   size_t gridCols = (numCols + blockSize.x - 1) / blockSize.x;
@@ -393,7 +414,7 @@ void your_gaussian_blur(const uchar4 * const h_inputImageRGBA, uchar4 * const d_
   //const size_t sGridSz = (gridRows + 2*fRad)*(gridCols + 2*fRad) * sizeof(float);
   // add space for shared mem filter after shared mem image data
 
-#ifdef SHARED_FILTER  
+#ifdef SHARED_FILTER
     int s_filterSize = filterWidth*filterWidth;
 #else
     int s_filterSize = 0;

@@ -15,7 +15,7 @@
 
 //To convert an image from color to grayscale one simple method is to
 //set the intensity to the average of the RGB channels.  But we will
-//use a more sophisticated method that takes into account how the eye 
+//use a more sophisticated method that takes into account how the eye
 //perceives color and weights the channels unequally.
 
 //The eye responds most strongly to green followed by red and then blue.
@@ -24,7 +24,7 @@
 
 //I = .299f * R + .587f * G + .114f * B
 
-//Notice the trailing f's on the numbers which indicate that they are 
+//Notice the trailing f's on the numbers which indicate that they are
 //single precision floating point constants and not double precision
 //constants.
 
@@ -40,6 +40,7 @@ void rgba_to_greyscale(const uchar4* const rgbaImage,
                        unsigned char* const greyImage,
                        int numRows, int numCols)
 {
+
     int xpos = threadIdx.x + blockIdx.x*blockDim.x;
     int ypos = threadIdx.y + blockIdx.y*blockDim.y;
     if(xpos < numCols && ypos < numRows){
@@ -59,20 +60,18 @@ void your_rgba_to_greyscale(const uchar4 * const h_rgbaImage, uchar4 * const d_r
   //currently only one block with one thread is being launched
   //first calculate number of total threads to run
   size_t arrsize = numRows*numCols;
-  
+
   // try 16* 16 grid (256 threads in grid)
   //const dim3 blockSize(32,32,1);
   const dim3 blockSize(numCols,1,1);
 
   size_t gridCols = (numCols + blockSize.x - 1) / blockSize.x;
   size_t gridRows = (numRows + blockSize.y - 1) / blockSize.y;
- 
-  
+
   //const dim3 gridSize(gridCols, gridRows, 1);  //TODO
   const dim3 gridSize(1, numRows, 1);  //TODO
-  
+
   rgba_to_greyscale<<<gridSize, blockSize>>>(d_rgbaImage, d_greyImage, numRows, numCols);
-  
-  
+
   cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 }
