@@ -128,5 +128,111 @@ void reduce_min_max(const float* const d_input_array, unsigned num_elem_in, floa
 
 	}
 	return;
+}
 
+__global__ void shmem_reduce_kernel_min(float * d_out, const float * d_in, int arraysize)
+{
+	extern __shared__ float sdata[];
+	int myId = threadIdx.x + blockDim.x * blockIdx.x;
+	int tid = threadIdx.x;
+	if (myId > arraysize)
+		sdata[tid] = FLT_MAX;
+	else
+		sdata[tid] = d_in[myId];
+	__syncthreads(); // make sure entire block is loaded!
+	for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1) 
+	{
+		if (tid < s) 
+		{
+			sdata[tid] = min(sdata[tid], sdata[tid + s]);
+		}
+		__syncthreads(); 
+	}
+	if (tid == 0) d_out[blockIdx.x] = sdata[0];
+}
+
+__global__ void shmem_reduce_kernel_max(float * d_out, const float * d_in, int arraysize) 
+{
+	extern __shared__ float sdata[];
+	int myId = threadIdx.x + blockDim.x * blockIdx.x;
+	int tid = threadIdx.x;
+	if (myId > arraysize)
+		sdata[tid] = FLT_MIN;
+	else
+		sdata[tid] = d_in[myId];
+	
+	__syncthreads(); // make sure entire block is loaded!
+	for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1) {
+		if (tid < s) 
+		{
+			sdata[tid] = max(sdata[tid], sdata[tid + s]);
+		}
+		__syncthreads(); 
+	}
+	if (tid == 0) d_out[blockIdx.x] = sdata[0];
+}
+
+int nextpower(int in) {
+	if (in > 1024 || in < 1) {
+		printf("Array Size %d out of bounds!\n");
+		return(in);
+	}
+	if (in > 512) return 1024;
+	if (in > 256) return 512;
+	if (in > 128) return 256;
+	if (in > 64) return 128;
+	if (in > 32) return 64;
+	if (in > 16) return 32;
+	if (in > 8) return 16;
+	if (in > 4) return 8;
+	if (in > 2) return 4;
+	if (in == 1) return 2;
+	return(in);
+}
+
+
+//void reduce_min_max2(float * d_outmin, float * d_outmax, const float* const d_in, float * d_intermin, float * d_intermax, const size_t numRows, const size_t numCols) {
+void reduce_min_max2(float& d_outmin, float& d_outmax, const float* const d_in, const size_t numRows, const size_t numCols) {
+	const int maxThreadsPerBlock = 1024; // BLOCKSIZE;
+	float * d_out;
+	checkCudaErrors(cudaMalloc((void**)&d_out, sizeof(float)));
+	float* h_out = (float*)malloc(sizeof(float));
+	int arraysize = numRows*numCols;
+	int threads = maxThreadsPerBlock; // launch one thread for each block in prev step
+	int blocks = numRows*numCols / maxThreadsPerBlock;
+	blocks = nextpower(blocks);
+
+	float * d_intermax;
+	checkCudaErrors(cudaMalloc((void**)&d_intermax, blocks * sizeof(float)));
+	
+	shmem_reduce_kernel_max << <blocks, threads, threads * sizeof(float) >> > (d_intermax, d_in, arraysize);
+	
+	threads = blocks; // launch one thread for each block in prev step actually move up to next power of 2
+	
+	
+	blocks = 1;
+	
+	shmem_reduce_kernel_max << <blocks, threads, threads * sizeof(float) >> > (d_out, d_intermax, arraysize/maxThreadsPerBlock);
+	checkCudaErrors(cudaMemcpy(h_out, d_out, sizeof(float), cudaMemcpyDeviceToHost));
+	d_outmax = h_out[0];
+
+	threads = maxThreadsPerBlock;
+	blocks = numRows*numCols / maxThreadsPerBlock;
+	blocks = nextpower(blocks);
+	float * d_intermin;
+	checkCudaErrors(cudaMalloc((void**)&d_intermin, blocks * sizeof(float)));
+	
+	shmem_reduce_kernel_min << <blocks, threads, threads * sizeof(float) >> > (d_intermin, d_in, arraysize);
+	threads = blocks; // launch one thread for each block in prev step
+	blocks = 1;
+	printf("launching %d threads in last reduction of single block\n", threads);
+	shmem_reduce_kernel_min << < blocks, threads, threads * sizeof(float) >> > (d_out, d_intermin, arraysize/maxThreadsPerBlock);
+	checkCudaErrors(cudaMemcpy(h_out, d_out, sizeof(float), cudaMemcpyDeviceToHost));
+	d_outmin = h_out[0];
+
+	checkCudaErrors(cudaFree(d_intermin));
+
+	free(h_out);
+	checkCudaErrors(cudaFree(d_intermax));
+	checkCudaErrors(cudaFree(d_out));
 }
