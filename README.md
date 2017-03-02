@@ -5,7 +5,7 @@ cs344 [Introduction to Parallel Programming] (https://www.udacity.com/course/int
 ---------------------------------------------------------------------------------
 1. Install Visual Studio:
 
-	- [download here](https://www.visualstudio.com/vs/).
+	- <a href="https://www.visualstudio.com/vs/" target="_blank">download here</a>.
 
 	I installed Visual Studio 2015.
 
