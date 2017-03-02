@@ -1,12 +1,20 @@
 //
-// This reduction code works most of the time, but failed on memorial_large.exr
-// did not debug how it fails
-//
-// produces :
+// This reduction code worked most of the time, but failed on memorial_large.exr
+// produced :
 //   min is -3.109206, max is 2.350199, range is 5.459405
 // should be :
 //   min is -3.122315, max is 2.350199, range is 5.472514
+// debugged how it failed - error due to running min and max reduction in a loop,
+// but not re-initializing num_elem_in, when running second loop.
+//  num_elem_in had been shrinking.
+// Took a lot of debugging code, but realized issue was with the input when 
+// I switched the order of the min max reductions and got the wrong answer for 
+// the other operation.
 
+#include <cuda_runtime.h>
+#include "utils.h"
+
+#define MAX_THREADS_PER_BLOCK 32 //1024 //?
 
 __global__ void reduce_min_max_kernel(float* d_out, float* d_in, int array_len, bool use_min)
 	/*
@@ -29,13 +37,14 @@ __global__ void reduce_min_max_kernel(float* d_out, float* d_in, int array_len, 
 	// the first value of the actual global array.
 	if (global_idx >= array_len) input_array[th_idx] = d_in[0];
 	else input_array[th_idx] = d_in[global_idx];
+	
 	__syncthreads(); // syncs up all threads within the block.
 
 					 // Do reduction in shared memory. All elements in input_array are
 					 // filled (some with duplicate values from first element of global
 					 // input array which wont effect final result).
 
-	for (int neighbor = 1; neighbor<=blockDim.x; neighbor *=2){
+	for (int neighbor = 1; neighbor<=blockDim.x/2; neighbor *=2){
 		int skip = 2 * neighbor;
 		if ((th_idx % skip) == 0) {
 			if ((th_idx + neighbor) < blockDim.x) {
@@ -43,10 +52,12 @@ __global__ void reduce_min_max_kernel(float* d_out, float* d_in, int array_len, 
 				else input_array[th_idx] = max(input_array[th_idx], input_array[th_idx + neighbor]);
 			}
 		}
+		
 		__syncthreads();
 	}
 
 	// only thread 0 writes result for this block to d_out:
+
 	if (th_idx == 0) {
 		d_out[blockIdx.x] = input_array[0];
 	}
@@ -65,38 +76,44 @@ void reduce_min_max(const float* const d_input_array, unsigned num_elem_in, floa
 	// We can't change original array, so copy it here on device so that
 	// we can modify it:
 
-	float* d_in;
+	float * d_in;
+
+	
+	const unsigned int num_elem_store = num_elem_in;
+	
 	for (int min_or_max = 0; min_or_max < 2; min_or_max++)
 	{
+		num_elem_in = num_elem_store;
 		checkCudaErrors(cudaMalloc((void**)&d_in, num_elem_in * sizeof(float)));
-		checkCudaErrors(cudaMemcpy(d_in, d_input_array, num_elem_in * sizeof(float),
-			cudaMemcpyDeviceToDevice));
-
+		checkCudaErrors(cudaMemcpy(d_in, d_input_array, num_elem_in * sizeof(float), cudaMemcpyDeviceToDevice));
+				
 		int nthreads = MAX_THREADS_PER_BLOCK;
 		int num_elem_out = (num_elem_in - 1) / MAX_THREADS_PER_BLOCK + 1;
 		int nblocks = num_elem_out;
 
-		//unsigned iloop = 0;
 		while (true) {
 
-			float* d_out;
+			float * d_out;
+						
 			checkCudaErrors(cudaMalloc((void**)&d_out, num_elem_out * sizeof(float)));
-
 			reduce_min_max_kernel << <nblocks, nthreads, nthreads * sizeof(float) >> >
-				(d_out, d_in, num_elem_in, min_or_max);
-
+				(d_out, d_in, num_elem_in, (bool)min_or_max);
 			checkCudaErrors(cudaFree(d_in));
-
+			
 			if (num_elem_out <= 1) {  //check this
+				
 				// Copy output to h_out
 				float* h_out = (float*)malloc(sizeof(float));
-				checkCudaErrors(cudaMemcpy(h_out, d_out, sizeof(float), cudaMemcpyDeviceToHost));
-				if(min_or_max == 0)
-					maximum = h_out[0];
-				else
+				if (min_or_max) {
+					checkCudaErrors(cudaMemcpy(h_out, d_out, sizeof(float), cudaMemcpyDeviceToHost));
 					minimum = h_out[0];
-
+				}
+				else {
+					checkCudaErrors(cudaMemcpy(h_out, d_out, sizeof(float), cudaMemcpyDeviceToHost));
+					maximum = h_out[0];
+				}
 				free(h_out);
+
 				checkCudaErrors(cudaFree(d_out));
 				break;
 			}
@@ -106,33 +123,10 @@ void reduce_min_max(const float* const d_input_array, unsigned num_elem_in, floa
 			num_elem_out = (num_elem_in - 1) / MAX_THREADS_PER_BLOCK + 1;
 			nblocks = num_elem_out;
 			d_in = d_out;
-
+			
 		}
 
 	}
 	return;
 
-}
-
-void your_histogram_and_prefixsum(const float* const d_logLuminance,
-	unsigned int* const d_cdf,
-	float &min_logLum,
-	float &max_logLum,
-	const size_t numRows,
-	const size_t numCols,
-	const size_t numBins)
-{
-	const size_t numPixels = numRows*numCols;
-
-#ifdef INFORMATION
-	printf("The Number of pixels is %zd in %zd rows and %zd columns.\n", numPixels, numRows, numCols);
-#endif
-	// identify if uneven -
-	if (numPixels % 2) printf("this is not even!\n"); //- maybe need to assert here without any code changes -
-	unsigned int arrayLen = (unsigned int)numPixels;
-
-	reduce_min_max(d_logLuminance, arrayLen, min_logLum, max_logLum); //fails to find for memorial_large.exr
-
-	float range_logLum = max_logLum - min_logLum;
-	printf("min is %3.6f, max is %3.6f, range is %3.6f\n", min_logLum, max_logLum, range_logLum);
 }
