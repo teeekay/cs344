@@ -129,6 +129,19 @@ incoming d_cdf pointer which already has been allocated for you)       */
 
 //#define DEBUGGING // turn on to output information
 //#define INFORMATION
+//#define REDUCTION1
+//#define REDUCTION2
+
+#ifdef REDUCTION1
+//in "failedreduction.cu"
+void reduce_min_max(const float* const d_input_array, unsigned num_elem_in, float& minimum, float& maximum);
+#endif
+
+#ifdef REDUCTION2
+//in "failedreduction.cu"
+void reduce_min_max2(float& d_outmin, float& d_outmax, const float* const d_in, const size_t numRows, const size_t numCols);
+#endif
+
 
 #define BLOCKSIZE 128 //512
 
@@ -275,6 +288,16 @@ void your_histogram_and_prefixsum(const float* const d_logLuminance,
 	checkCudaErrors(cudaMalloc((void**)&d_maxout, blocks * sizeof(float)));
 	checkCudaErrors(cudaMalloc((void**)&d_maxout1, sizeof(float)));
 
+	//debug other reduction functions
+#ifdef REDUCTION1
+	reduce_min_max(d_logLuminance, numPixels, min_logLum, max_logLum);
+	std::cout << "reduce_min_max() found minimum of " << min_logLum << " and a maximum of " << max_logLum << "." << std::endl;
+#endif
+#ifdef REDUCTION2
+	reduce_min_max2(min_logLum, max_logLum, d_logLuminance, numRows, numCols);
+	std::cout << "reduce_min_max2() found minimum of " << min_logLum << " and a maximum of " << max_logLum << "." << std::endl;
+#endif	
+
 	float* d_minout;
 	float* d_minout1;
 	checkCudaErrors(cudaMalloc((void**)&d_minout, blocks * sizeof(float)));
@@ -318,6 +341,7 @@ void your_histogram_and_prefixsum(const float* const d_logLuminance,
 	max_logLum = h_maxout[0];
 	float range_logLum = max_logLum - min_logLum;
 
+	std::cout << "reduceMax() found minimum of " << min_logLum << " and a maximum of " << max_logLum << "." << std::endl;
 #ifdef INFORMATION
 	printf("min is %3.6f, max is %3.6f, range is %3.6f\n", min_logLum, max_logLum, range_logLum);
 #endif
