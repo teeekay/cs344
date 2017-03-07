@@ -190,7 +190,7 @@ __global__ void arraySet_kernel(unsigned int* d_vals, unsigned int value, size_t
 }
 
 
-__global__ void getPredicate_kernel(unsigned int * d_inVal, unsigned int * d_predVal, unsigned int * d_npredVal, unsigned int numElems, unsigned int bitMask)
+__global__ void getPredicate_kernel(unsigned int * d_inVal, unsigned int * d_predVal, unsigned int numElems, unsigned int bitMask)
 {
 
 	unsigned int gIdx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -200,27 +200,27 @@ __global__ void getPredicate_kernel(unsigned int * d_inVal, unsigned int * d_pre
 		// if bitmask matches inputvale then assign 1 to the position otherwise set to 0
 		// we'll need to run an inclusive scan later to get the position
 		d_predVal[gIdx] = ((d_inVal[gIdx] & bitMask) == bitMask) ? 1 : 0;
-		d_npredVal[gIdx] = ((d_inVal[gIdx] & bitMask) == bitMask) ? 0 : 1;
+		//d_npredVal[gIdx] = ((d_inVal[gIdx] & bitMask) == bitMask) ? 0 : 1;
 	}
 }
 
 __global__ void swapLocations_kernel(unsigned int * d_outVals, unsigned int * d_inVals,
 									 unsigned int * d_outPos, unsigned int * d_inPos,
-									 unsigned int * d_swapPred, unsigned int * d_swapnPred,
+									 unsigned int * d_swapPred, /*unsigned int * d_swapnPred,*/
 									 unsigned int numElems, unsigned int bitmask)
 {
 
 	unsigned int gIdx = blockIdx.x * blockDim.x + threadIdx.x;
+	offset = d_swapPred[numElems-1];
 
 	if (gIdx < numElems)
 	{
-		int pred = ((d_inVals[gIdx] & bitmask) == bitmask)? 1: 0;
-		unsigned int swapmove = (pred == 1) ? d_swapPred[gIdx] : d_swapnPred[gIdx];
+		unsigned int swapmove = ((d_inVals[gIdx] & bitmask) == bitmask) ? d_swapPred[gIdx] : (gIdx - d_swapnPred[gIdx])+offset;
 		d_outVals[swapmove] = d_inVals[gIdx];
 		d_outPos[swapmove] = d_inPos[gIdx];
 		if (gIdx < 100) {
-			printf("gIdx = %d , bitmask = %08x , pred = %d , swapmove = %d , d_inVals[gIdx] = %d, d_inPos[gIdx] = %d .\n ",
-				gIdx, bitmask, pred, swapmove, d_inVals[gIdx], d_inPos[gIdx]);
+			printf("gIdx = %d , bitmask = %08x , swapmove = %d , d_inVals[gIdx] = %d, d_inPos[gIdx] = %d .\n ",
+				gIdx, bitmask, swapmove, d_inVals[gIdx], d_inPos[gIdx]);
 		}
 	}
 }
@@ -313,19 +313,22 @@ void your_sort(unsigned int* const d_inputVals,
 	unsigned int * d_blockOffsets;
 	checkCudaErrors(cudaMalloc(&d_blockOffsets, gridSize.x * sizeof(unsigned int)));
 
-	unsigned int * d_predicates, * d_npredicates;
+	unsigned int * d_predicates; //, * d_npredicates;
 	checkCudaErrors(cudaMalloc(&d_predicates, numElems * sizeof(unsigned int)));
-	checkCudaErrors(cudaMalloc(&d_npredicates, numElems * sizeof(unsigned int)));
+	//checkCudaErrors(cudaMalloc(&d_npredicates, numElems * sizeof(unsigned int)));
 
 	for (int maskPtr = 0; maskPtr < 32; maskPtr++) //should be to 32
 	{
 		if (h_binHistogram[maskPtr] > 0)  //don't bother if no elements to be sorted - everything will stay the same
 		{
+			//rad_sort(d_inputVals, d_outputVals, d_inputPos, d_outputPos, d_predicates, d_npredicates, numElems);
+			// is npredicate == gIdx - d_predicates[gIdx] + d_binHistogram[bMasks[maskPtr]]
+
 			arraySet_kernel << <1, gridSize>> > (d_blockOffsets, (unsigned int) 0, gridSize.x);
 			cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 
 			// run predicate on input vals and put result in outputPos
-			getPredicate_kernel << <gridSize, blockSize >> > (d_inputVals, d_predicates, d_npredicates, numElems, bMasks[maskPtr]);
+			getPredicate_kernel << <gridSize, blockSize >> > (d_inputVals, d_predicates, numElems, bMasks[maskPtr]);
 			cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 
 			// run inclusive scans on each block, putting Offset total for that block in d_blockOffsets
@@ -349,33 +352,8 @@ void your_sort(unsigned int* const d_inputVals,
 
 			free(h_blockOffsets);
 #endif
-			arraySet_kernel << <1, gridSize >> > (d_blockOffsets, (unsigned int)0, gridSize.x);
-			cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
-
-			// run inclusive scans on each block, putting Offset total for that block in d_blockOffsets
-			incSumScanB1_kernel << < gridSize, blockSize, blockSize.x * sizeof(unsigned int) >> > (d_npredicates, d_npredicates, numElems, d_blockOffsets, h_binHistogram[maskPtr]);
-			cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
-			// run inclusive scan on d_blockoffsets
-			incSumScan_kernel << < 1, gridSize, gridSize.x * sizeof(unsigned int) >> > (d_blockOffsets, d_blockOffsets, gridSize.x);
-			cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
-			//finish the sumscan accounting for all blocks
-			incSumScanB2_kernel << < gridSize, blockSize >> > (d_npredicates, d_npredicates, numElems, d_blockOffsets);
-			cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
-#ifdef DEBUGGING1	
-			h_blockOffsets = (unsigned int*)std::malloc(gridSize.x * sizeof(unsigned int));
-			checkCudaErrors(cudaMemcpy(h_blockOffsets, d_blockOffsets, gridSize.x * sizeof(unsigned int), cudaMemcpyDeviceToHost));
-			std::cout << "h_blockOffsets [ ";
-			for (unsigned int i = 0; i < gridSize.x - 1; i++) {
-				std::cout << h_blockOffsets[i] << ",";
-			}
-			std::cout << h_blockOffsets[gridSize.x - 1] << "]" << std::endl;
-
-			free(h_blockOffsets);
-#endif
-
-
 			//do the gathering moving values and positions into new locations on the output arrays
-			swapLocations_kernel << < gridSize, blockSize >> > (d_outputVals, d_inputVals, d_outputPos, d_inputPos, d_predicates, d_npredicates, numElems, bMasks[maskPtr]);
+			swapLocations_kernel << < gridSize, blockSize >> > (d_outputVals, d_inputVals, d_outputPos, d_inputPos, d_predicates, numElems, bMasks[maskPtr]);
 			cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 
 			//now move all them back to input locations so we can do it again on next loop
