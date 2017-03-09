@@ -43,7 +43,7 @@
    at the end.
 
  */
-#define DEBUGGING1	
+//#define DEBUGGING1	
 // bitmasks
 #define b0  0x00000001
 #define b1  0x00000002
@@ -134,17 +134,18 @@ __global__ void incSumScan_kernel(unsigned int* d_outVals, unsigned int* d_inVal
 }
 
 //first part of inclusive sum scan of an array larger than a single block.
-__global__ void incSumScanB1_kernel(unsigned int* d_outVals, unsigned int* d_inVals, size_t numVals, unsigned int* d_blockOffset, unsigned int valOffset = 0)
+__global__ void incSumScanB1_kernel(unsigned int* d_outVals, unsigned int* d_inVals, size_t numVals, unsigned int* d_blockOffset, unsigned int valOffset)
 {
 	unsigned int tIdx = threadIdx.x;
 	unsigned int gIdx = blockIdx.x * blockDim.x + threadIdx.x;
 	extern __shared__  unsigned int s_incScan[];
 	if (gIdx >= numVals) return;
-
-	s_incScan[tIdx] = (gIdx==0)? d_inVals[gIdx] + valOffset: d_inVals[gIdx];
+	
+	//if it is the first element of a block then we need to add the offset to it.
+	s_incScan[tIdx] = (tIdx == 0)? d_inVals[gIdx] + valOffset: d_inVals[gIdx];
+	
+//	if (tIdx == 0) printf("gIdx =  %d,  d_inVals[ %d ] = %d , s_incScan[ %d ] = %d ,  valOffset = %d .\n", gIdx, gIdx, d_inVals[gIdx], tIdx, s_incScan[tIdx], valOffset);
 	__syncthreads();
-
-	if (gIdx == 0) printf("s_incScan[0] = %d , d_inVals[0] = %d .\n", s_incScan[gIdx], d_inVals[gIdx]);
 
 	//for (int offset = 1; offset <= numVals; offset = offset * 2)
 	for (int offset = 1; offset <= blockDim.x; offset = offset * 2)
@@ -158,7 +159,7 @@ __global__ void incSumScanB1_kernel(unsigned int* d_outVals, unsigned int* d_inV
 		}
 		__syncthreads();
 	}
-	d_outVals[tIdx] = s_incScan[tIdx];
+	d_outVals[gIdx] = s_incScan[tIdx];
 
 	//now set the cumulative sum for this block in the the blockoffsetarray
 	if ((tIdx + 1) == blockDim.x)
@@ -168,6 +169,9 @@ __global__ void incSumScanB1_kernel(unsigned int* d_outVals, unsigned int* d_inV
 			d_blockOffset[blockIdx.x + 1] = s_incScan[tIdx]; //this will still need to be summed with other blocks
 		}
 	}
+//	if (gIdx < 10 || gIdx > (numVals - 10)) printf("gIdx =  %d,  d_inVals[ %d ] = %d, d_outvals[ %d ] = %d , s_incScan[ %d ] = %d ,  valOffset = %d .\n",
+//		 gIdx, gIdx, d_inVals[gIdx], gIdx, d_outVals[gIdx], tIdx, s_incScan[tIdx], valOffset);
+	
 }
 
 //finishes the multi-part sumScan of an array larger than blockSize -
@@ -211,17 +215,33 @@ __global__ void swapLocations_kernel(unsigned int * d_outVals, unsigned int * d_
 {
 
 	unsigned int gIdx = blockIdx.x * blockDim.x + threadIdx.x;
-	offset = d_swapPred[numElems-1];
+	unsigned int offset = d_swapPred[numElems-1];
+	int swapmove;
+	__syncthreads();
 
 	if (gIdx < numElems)
 	{
-		unsigned int swapmove = ((d_inVals[gIdx] & bitmask) == bitmask) ? d_swapPred[gIdx] : (gIdx - d_swapnPred[gIdx])+offset;
+		//unsigned int swapmove = ((d_inVals[gIdx] & bitmask) == bitmask) ? d_swapPred[gIdx]-1 : (gIdx - (d_swapPred[gIdx]-1))+offset-1;
+		if ((d_inVals[gIdx] & bitmask) == bitmask)
+		{
+			swapmove = d_swapPred[gIdx] - 1;
+			//if (gIdx < 10 || gIdx >(numElems - 10)) printf("gIdx = %d, swapmove = %d .\n", gIdx, swapmove);
+			//if (swapmove < 0) swapmove = 0;
+		}
+		else
+		{
+			swapmove = (gIdx - (d_swapPred[gIdx] - 1)) + offset-1;
+			//if (gIdx < 10 || gIdx >(numElems - 10)) printf("gIdx = %d, swapmove = %d, offset = %d .\n", gIdx, swapmove, offset);
+			//if (swapmove < 0) swapmove = 0;
+		}
+
+
 		d_outVals[swapmove] = d_inVals[gIdx];
 		d_outPos[swapmove] = d_inPos[gIdx];
-		if (gIdx < 100) {
-			printf("gIdx = %d , bitmask = %08x , swapmove = %d , d_inVals[gIdx] = %d, d_inPos[gIdx] = %d .\n ",
-				gIdx, bitmask, swapmove, d_inVals[gIdx], d_inPos[gIdx]);
-		}
+//		if (gIdx < 10 || gIdx > (numElems - 10)) {
+//			printf("gIdx = %d , bitmask = %08x , offset= %d, swapmove = %d , d_inVals[gIdx] = %d, d_inPos[gIdx] = %d .\n ",
+//				gIdx, bitmask, offset, swapmove, d_inVals[gIdx], d_inPos[gIdx]);
+//		}
 	}
 }
 
@@ -234,25 +254,30 @@ __global__ void swapVals_kernel(unsigned int * d_newArray, unsigned int * d_oldA
 	}
 }
 
+__global__ void reverseSort_kernel(unsigned int * d_newArray, unsigned int * d_oldArray, unsigned int numElems)
+{
+	unsigned int gIdx = blockIdx.x * blockDim.x + threadIdx.x;
+	if (gIdx < numElems)
+	{
+		d_newArray[gIdx] = d_oldArray[(numElems - 1)- gIdx];
+	}
+}
+
 void your_sort(unsigned int* const d_inputVals,
                unsigned int* const d_inputPos,
                unsigned int* const d_outputVals,
                unsigned int* const d_outputPos,
                const size_t numElems)
 { 
-	//not sure about this -
+
 	//inputPos holds original position.
-	//outputPos holds location to move inputVal and inputPos to
+	//outputPos holds the location when resorted by Val
 
 
 #ifdef DEBUGGING1	  
 	std::cout << "Sort of " << numElems << " Elements through " << 8*sizeof(unsigned int)<< " loops." << std::endl;
 #endif
 
-//	const int numBits = 1;
-//	const int numBins = 2; // 1 << numBits;  // this is two...
-
-//	std::cout << "numBits = " << numBits << " and numBins = " << numBins << " ." << std::endl;
 	
 	unsigned int threadsperblock = 32;
 
@@ -271,7 +296,7 @@ void your_sort(unsigned int* const d_inputVals,
 	blockSize = { threadsperblock, 1, 1 };
 	gridSize = { ((unsigned int)numElems + blockSize.x - 1) / blockSize.x, 1, 1 };
 	
-	std::cout << "blocks = " << gridSize.x << " when using " << blockSize.x << " threads per block ." << std::endl;
+//	std::cout << "blocks = " << gridSize.x << " when using " << blockSize.x << " threads per block ." << std::endl;
 	
 	lsbHisto_kernel << <gridSize, blockSize, blockSize.x*sizeof(unsigned int) >> > (d_binHistogram, numBins, d_inputVals, numElems);
 	cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
@@ -308,7 +333,7 @@ void your_sort(unsigned int* const d_inputVals,
 	blockSize = { threadsperblock, 1, 1 };
 	gridSize = { ((unsigned int)numElems + blockSize.x - 1) / blockSize.x, 1, 1 };
 
-	std::cout << "Doing inclusive sumscan in " << gridSize.x << " blocks of " << blockSize.x << " threads." << std::endl;
+//	std::cout << "Doing inclusive sumscan in " << gridSize.x << " blocks of " << blockSize.x << " threads." << std::endl;
 
 	unsigned int * d_blockOffsets;
 	checkCudaErrors(cudaMalloc(&d_blockOffsets, gridSize.x * sizeof(unsigned int)));
@@ -317,6 +342,7 @@ void your_sort(unsigned int* const d_inputVals,
 	checkCudaErrors(cudaMalloc(&d_predicates, numElems * sizeof(unsigned int)));
 	//checkCudaErrors(cudaMalloc(&d_npredicates, numElems * sizeof(unsigned int)));
 
+	//for (int maskPtr = 0; maskPtr < 32; maskPtr++) //should be to 32
 	for (int maskPtr = 0; maskPtr < 32; maskPtr++) //should be to 32
 	{
 		if (h_binHistogram[maskPtr] > 0)  //don't bother if no elements to be sorted - everything will stay the same
@@ -361,58 +387,39 @@ void your_sort(unsigned int* const d_inputVals,
 			cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 			swapVals_kernel << < gridSize, blockSize >> > (d_inputPos, d_outputPos, numElems);
 			cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
-			std::cout << "Got to end of loop " << maskPtr << std::endl;
+//			std::cout << "Got to end of loop " << maskPtr << std::endl;
+		}
+		else
+		{
+//			printf("skipping loop %d because there are no matches on this bitmask.\n", maskPtr);
 		}
 	}
-	//unsigned int *binScan = new unsigned int[numBins];
+
+	threadsperblock = 1024;
+	blockSize = { threadsperblock, 1, 1 };
+	gridSize = { ((unsigned int)numElems + blockSize.x - 1) / blockSize.x, 1, 1 };
+	//I may have sorted the wrong way!
+	reverseSort_kernel << < gridSize, blockSize >> > (d_outputPos, d_inputPos, numElems);
+	cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
+
+	reverseSort_kernel << < gridSize, blockSize >> > (d_outputVals, d_inputVals, numElems);
+	cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
+
+#ifdef DEBUGGING1
+	unsigned int * h_Vals = (unsigned int*)std::malloc(numElems * sizeof(unsigned int));
+	checkCudaErrors(cudaMemcpy(h_Vals, d_outputVals, numElems * sizeof(unsigned int), cudaMemcpyDeviceToHost));
+	unsigned int * h_Poss = (unsigned int*)std::malloc(numElems * sizeof(unsigned int));
+	checkCudaErrors(cudaMemcpy(h_Poss, d_outputPos, numElems * sizeof(unsigned int), cudaMemcpyDeviceToHost));
+	std::cout << "Pos, Val, OrigPos \n";
+	for (unsigned int i = 0; i < numElems; i++) {
+		std::cout << i <<","<< h_Vals[i] << "," << h_Poss[i] << "," << std::endl;
+	}
 	
-	// d_inputVals unsigned int *vals_src = inputVals;
-	// d_inputPos  unsigned int *pos_src = inputPos;
 
-	// d_outputVals unsigned int *vals_dst = outputVals;
-	// d_outputPos  unsigned int *pos_dst = outputPos;
+	free(h_Vals);
+	free(h_Poss);
+#endif
 
-	//a simple radix sort - only guaranteed to work for numBits that are multiples of 2
-	//for (unsigned int i = 0; i < 8 * sizeof(unsigned int); i += numBits) {
-		
-		//unsigned int mask = (numBins - 1) << i;
-
-		//memset(binHistogram, 0, sizeof(unsigned int) * numBins); //zero out the bins
-		//memset(binScan, 0, sizeof(unsigned int) * numBins); //zero out the bins
-
-
-
-															//perform histogram of data & mask into bins
-		//for (unsigned int j = 0; j < numElems; ++j) {
-		//	unsigned int bin = (vals_src[j] & mask) >> i;
-		//	binHistogram[bin]++;
-		//}
-
-		//perform exclusive prefix sum (scan) on binHistogram to get starting
-		//location for each bin
-		//for (unsigned int j = 1; j < numBins; ++j) {
-		//	binScan[j] = binScan[j - 1] + binHistogram[j - 1];
-		//}
-
-		//Gather everything into the correct location
-		//need to move vals and positions
-		//for (unsigned int j = 0; j < numElems; ++j) {
-		//	unsigned int bin = (vals_src[j] & mask) >> i;
-		//	vals_dst[binScan[bin]] = vals_src[j];
-		//	pos_dst[binScan[bin]] = pos_src[j];
-		//	binScan[bin]++;
-		//}
-
-		//swap the buffers (pointers only)
-		//std::swap(vals_dst, vals_src);
-		//std::swap(pos_dst, pos_src);
-//	}
-
-	//we did an even number of iterations, need to copy from input buffer into output
-	//std::copy(inputVals, inputVals + numElems, outputVals);
-	//std::copy(inputPos, inputPos + numElems, outputPos);
-	
-	//delete[] binScan;
 	free(h_binHistogram);
 	checkCudaErrors(cudaFree(d_binHistogram));
 	checkCudaErrors(cudaFree(d_blockOffsets));

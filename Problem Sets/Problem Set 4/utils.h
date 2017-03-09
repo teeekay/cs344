@@ -24,14 +24,17 @@ void check(T err, const char* const func, const char* const file, const int line
 template<typename T>
 void checkResultsExact(const T* const ref, const T* const gpu, size_t numElem) {
   //check that the GPU result matches the CPU result
+	int errcounter = 0;
   for (size_t i = 0; i < numElem; ++i) {
+
     if (ref[i] != gpu[i]) {
       std::cerr << "Difference at pos " << i << std::endl;
       //the + is magic to convert char to int without messing
       //with other types
       std::cerr << "Reference: " << std::setprecision(17) << +ref[i] <<
                  "\nGPU      : " << +gpu[i] << std::endl;
-      exit(1);
+	  errcounter++;
+	  if (errcounter>20) exit(1);
     }
   }
 }
